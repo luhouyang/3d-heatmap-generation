@@ -1,0 +1,3 @@
+[submodule "src/3d_dataset/EDVAM"]
+	path = src/3d_dataset/EDVAM
+	url = https://github.com/YunzhanZHOU/EDVAM.git
