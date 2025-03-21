@@ -69,9 +69,10 @@ min_intensity = min(voxel_intensity.values())
 
 normalized_voxel_intensity = {}
 for index_tuple, total_intensity in voxel_intensity.items():
-    normalized_intensity = (total_intensity - min_intensity) / (
-        max_intensity - min_intensity + 1e-6)
-    normalized_voxel_intensity[index_tuple] = normalized_intensity
+    # normalized_intensity = (total_intensity - min_intensity) / (
+    #     max_intensity - min_intensity + 1e-6)
+    # normalized_voxel_intensity[index_tuple] = normalized_intensity
+    normalized_voxel_intensity[index_tuple] = total_intensity
 
 # Populate the voxel grid with voxels and colors
 voxel_list = []

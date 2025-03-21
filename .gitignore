@@ -5,3 +5,7 @@ archive/unity
 data
 
 *.pth
+*.csv
+*.ply
+*.json
+*.png
