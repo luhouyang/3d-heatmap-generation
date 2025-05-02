@@ -65,7 +65,7 @@ def gaussian_blur(positions, frequencies, sigma):
 
 def main():
     input_file = r"C:\Users\User\Desktop\Python\deep_learning\3d-heatmap-generation\experiment\unity\pointcloud.csv"  # Replace with your input file
-    output_file = r"C:\Users\User\Desktop\Python\deep_learning\3d-heatmap-generation\experiment\unity\pointcloud_gaus_blurred.ply"
+    output_file = r"C:\Users\User\Desktop\Python\deep_learning\3d-heatmap-generation\experiment\unity\pointcloud_kd_tree.ply"
     # output_file = r"C:\Users\User\Desktop\Python\deep_learning\3d-heatmap-generation\experiment\unity\pointcloud.ply"
 
     data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
@@ -90,7 +90,8 @@ def main():
 
     ### Apply Gaussian blur
     ### Larger sigma may cause over blending and spread, adjust with care
-    sigma = 0.02
+    # sigma = 0.02
+    sigma = 30.0
     blurred_intensities = gaussian_blur(filtered_positions, filtered_frequencies,
                                         sigma)
     # blurred_intensities = filtered_frequencies

@@ -2,6 +2,7 @@ archive/others
 archive/papers
 archive/unity
 archive/test
+archive/documentation
 
 data
 
@@ -10,3 +11,7 @@ data
 *.ply
 *.json
 *.png
+*.wav
+*.mp4
+*.obj
+*.zip

@@ -33,7 +33,8 @@ max_bound = np.max(filtered_xyz, axis=0)
 
 ### Calculate voxel grid dimensions
 ### Increase voxel_size for more resolution
-voxel_size = 0.004
+# voxel_size = 0.004
+voxel_size = 3.5
 grid_min_bound = np.floor(min_bound / voxel_size) * voxel_size
 grid_max_bound = np.ceil(max_bound / voxel_size) * voxel_size
 grid_dimensions = ((grid_max_bound - grid_min_bound) / voxel_size).astype(int)
