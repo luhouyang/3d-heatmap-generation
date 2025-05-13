@@ -4,6 +4,8 @@ archive/unity
 archive/test
 archive/documentation
 
+experiment/locals
+
 data
 
 *.pth
