@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 import pathlib
 
+
 def gaussian_blur_density(positions, sigma):
     """Applies Gaussian blur to estimate point density."""
     n_points = len(positions)
@@ -223,7 +224,7 @@ if __name__ == '__main__':
     generate_point_cloud = True
     generate_mesh = True
 
-    session_paths = curr_dir / pathlib.Path('experiment/data')
+    session_paths = curr_dir / pathlib.Path('src/data')
     for sessions in os.listdir(session_paths):
         model_paths = session_paths / pathlib.Path(sessions)
 
@@ -231,7 +232,8 @@ if __name__ == '__main__':
             datafile_paths = model_paths / pathlib.Path(models)
 
             input_file = os.path.join(datafile_paths, "pointcloud.csv")
-            output_point_cloud = os.path.join(datafile_paths, "pointcloud_viz.ply")
+            output_point_cloud = os.path.join(datafile_paths,
+                                              "pointcloud_viz.ply")
             model_file = os.path.join(datafile_paths, "model.obj")
             output_mesh = os.path.join(datafile_paths, "heatmap_viz.ply")
 
