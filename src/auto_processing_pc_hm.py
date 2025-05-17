@@ -117,12 +117,14 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     return pcd
 
 
-def create_heatmap_mesh_from_density(input_file,
-                                     model_file,
-                                     output_file,
-                                     sigma=0.3,
-                                     interpolation_radius=0.05,
-                                     visualize=True):
+def create_heatmap_mesh_from_density(
+        input_file,
+        model_file,
+        output_file,
+        #  sigma=0.3,
+        interpolation_radius=0.05,
+        visualize=True,
+        ball_radius=0.05):
     """
     Generates a heatmap on a provided 3D mesh model based on the density
     of the input points, using a weighted interpolation for higher resolution.
@@ -138,11 +140,27 @@ def create_heatmap_mesh_from_density(input_file,
     Returns:
         mesh: The created Open3D mesh object with density colors.
     """
-    data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
-    positions = data[:, :3]
+    # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+    # positions = data[:, :3]
 
-    # Estimate point density
-    point_density = gaussian_blur_density(positions, sigma)
+    # # Estimate point density
+    # point_density = gaussian_blur_density(positions, sigma)
+
+    data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+    positions = data[:, :3]  # Extract XYZ coordinates
+
+    # Create an Open3D point cloud object
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(positions)
+
+    # Use the previously calculated average distance to set a default ball_radius
+    distances = pcd.compute_nearest_neighbor_distance()
+    avg_distance = np.mean(distances)
+    if ball_radius <= 0:
+        ball_radius = avg_distance * 10
+
+    # Calculate density
+    point_density = calculate_point_density(pcd, ball_radius)
 
     # Load the mesh (OBJ or PLY supported by Open3D)
     mesh = o3d.io.read_triangle_mesh(model_file)
@@ -160,21 +178,45 @@ def create_heatmap_mesh_from_density(input_file,
         nearby_point_indices = tree.query_ball_point(vertex,
                                                      interpolation_radius)
 
-        if not nearby_point_indices:
-            # If no points are nearby, use the nearest neighbor as a fallback
-            closest_point_index = tree.query(vertex)[1]
-            colors[i, :] = cmap(point_density[closest_point_index])[:3]
-        else:
-            # Weighted interpolation
+        # if not nearby_point_indices:
+        #     # If no points are nearby, use the nearest neighbor as a fallback
+        #     closest_point_index = tree.query(vertex)[1]
+        #     colors[i, :] = cmap(point_density[closest_point_index])[:3]
+        # else:
+        #     # Weighted interpolation
+        #     weights = []
+        #     for point_index in nearby_point_indices:
+        #         distance = np.linalg.norm(vertex - positions[point_index])
+        #         # Weight by inverse distance. Add a small epsilon to avoid division by zero.
+        #         weights.append(1.0 / (distance + 1e-6))
+        #     weights = np.array(weights)
+        #     weighted_densities = weights * point_density[nearby_point_indices]
+        #     interpolated_density = np.sum(weighted_densities) / np.sum(weights)
+        #     colors[i, :] = cmap(interpolated_density)[:3]
+
+        # # Weighted interpolation
+        # weights = []
+        # for point_index in nearby_point_indices:
+        #     distance = np.linalg.norm(vertex - positions[point_index])
+        #     # Weight by inverse distance. Add a small epsilon to avoid division by zero.
+        #     weights.append(1.0 / (distance + 1e-6))
+        # weights = np.array(weights)
+        # weighted_densities = weights * point_density[nearby_point_indices]
+        # interpolated_density = (np.sum(weighted_densities)) / np.sum(weights)
+        # colors[i, :] = cmap(interpolated_density)[:3]
+
+        # Weighted interpolation
+        if nearby_point_indices:
             weights = []
             for point_index in nearby_point_indices:
                 distance = np.linalg.norm(vertex - positions[point_index])
-                # Weight by inverse distance. Add a small epsilon to avoid division by zero.
                 weights.append(1.0 / (distance + 1e-6))
             weights = np.array(weights)
             weighted_densities = weights * point_density[nearby_point_indices]
             interpolated_density = np.sum(weighted_densities) / np.sum(weights)
             colors[i, :] = cmap(interpolated_density)[:3]
+        else:
+            colors[i, :] = [0.0, 0.0, 0.3]
 
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
@@ -216,9 +258,10 @@ if __name__ == '__main__':
     curr_dir = pathlib.Path.cwd()
 
     # Parameters
-    point_cloud_ball_radius = 30
-    mesh_sigma = 10
-    mesh_interpolation_radius = 0.05
+    point_cloud_ball_radius = 25  # 10 | 0.05
+    # mesh_sigma = 10 # 10 | 0.05
+    mesh_interpolation_radius = 10  # 15 | 0.05
+    ball_radius = 25  # 30 | 0.05
 
     # Choose what to generate
     generate_point_cloud = True
@@ -243,6 +286,7 @@ if __name__ == '__main__':
                 pcd = create_and_visualize_xyz_colored_point_cloud(
                     input_file,
                     output_point_cloud,
+                    visualize=False,
                     ball_radius=point_cloud_ball_radius)
 
             # Generate heatmap mesh based on point density
@@ -252,8 +296,10 @@ if __name__ == '__main__':
                     input_file,
                     model_file,
                     output_mesh,
-                    sigma=mesh_sigma,
-                    interpolation_radius=mesh_interpolation_radius)
+                    visualize=False,
+                    # sigma=mesh_sigma,
+                    interpolation_radius=mesh_interpolation_radius,
+                    ball_radius=ball_radius)
             elif generate_mesh and not os.path.exists(model_file):
                 print(
                     f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
