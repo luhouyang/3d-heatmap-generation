@@ -258,10 +258,10 @@ if __name__ == '__main__':
     curr_dir = pathlib.Path.cwd()
 
     # Parameters
-    point_cloud_ball_radius = 25  # 10 | 0.05
+    point_cloud_ball_radius = 25  # 25 | 0.05
     # mesh_sigma = 10 # 10 | 0.05
-    mesh_interpolation_radius = 10  # 15 | 0.05
-    ball_radius = 25  # 30 | 0.05
+    mesh_interpolation_radius = 10  # 10 | 0.05
+    ball_radius = 25  # 25 | 0.05
 
     # Choose what to generate
     generate_point_cloud = True
