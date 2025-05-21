@@ -216,7 +216,7 @@ def create_heatmap_mesh_from_density(
             interpolated_density = np.sum(weighted_densities) / np.sum(weights)
             colors[i, :] = cmap(interpolated_density)[:3]
         else:
-            colors[i, :] = [0.0, 0.0, 0.3]
+            colors[i, :] = [0.0, 0.0, 0.3] # This adds a dark blue background
 
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
@@ -258,10 +258,10 @@ if __name__ == '__main__':
     curr_dir = pathlib.Path.cwd()
 
     # Parameters
-    point_cloud_ball_radius = 25  # 25 | 0.05
+    point_cloud_ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     # mesh_sigma = 10 # 10 | 0.05
-    mesh_interpolation_radius = 10  # 10 | 0.05
-    ball_radius = 25  # 25 | 0.05
+    mesh_interpolation_radius = 10  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
+    ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
     # Choose what to generate
     generate_point_cloud = True
