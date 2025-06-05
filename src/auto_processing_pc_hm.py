@@ -216,7 +216,7 @@ def create_heatmap_mesh_from_density(
             interpolated_density = np.sum(weighted_densities) / np.sum(weights)
             colors[i, :] = cmap(interpolated_density)[:3]
         else:
-            colors[i, :] = [0.0, 0.0, 0.3] # This adds a dark blue background
+            colors[i, :] = [0.0, 0.0, 0.3]  # This adds a dark blue background
 
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
@@ -267,6 +267,18 @@ if __name__ == '__main__':
     generate_point_cloud = True
     generate_mesh = True
 
+    parameters_dict = {
+        "J-7606": [0.02, 0.005, 0.02],
+        "IN0295": [3, 3, 3],
+        "IN0306": [2, 1, 2],
+        "NZ0001": [3, 1, 3],
+        "SK0035": [5, 3, 5],
+        "MH0037": [3, 1, 3],
+        "NM0239": [3, 1, 3],
+        "TK0020": [2, 0.8, 2],
+        "UD0028": [6, 2, 6],
+    }
+
     session_paths = curr_dir / pathlib.Path('src/data')
     for sessions in os.listdir(session_paths):
         model_paths = session_paths / pathlib.Path(sessions)
@@ -280,27 +292,53 @@ if __name__ == '__main__':
             model_file = os.path.join(datafile_paths, "model.obj")
             output_mesh = os.path.join(datafile_paths, "heatmap_viz.ply")
 
-            # Generate colored point cloud based on density
-            if generate_point_cloud:
-                print("\n=== Generating density-colored point cloud ===")
-                pcd = create_and_visualize_xyz_colored_point_cloud(
-                    input_file,
-                    output_point_cloud,
-                    visualize=False,
-                    ball_radius=point_cloud_ball_radius)
+            if (models not in parameters_dict.keys()):
+                # Generate colored point cloud based on density
+                if generate_point_cloud:
+                    print("\n=== Generating density-colored point cloud ===")
+                    pcd = create_and_visualize_xyz_colored_point_cloud(
+                        input_file,
+                        output_point_cloud,
+                        visualize=False,
+                        ball_radius=point_cloud_ball_radius)
 
-            # Generate heatmap mesh based on point density
-            if generate_mesh and os.path.exists(model_file):
-                print("\n=== Generating density heatmap on mesh ===")
-                heatmap_mesh = create_heatmap_mesh_from_density(
-                    input_file,
-                    model_file,
-                    output_mesh,
-                    visualize=False,
-                    # sigma=mesh_sigma,
-                    interpolation_radius=mesh_interpolation_radius,
-                    ball_radius=ball_radius)
-            elif generate_mesh and not os.path.exists(model_file):
-                print(
-                    f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
-                )
+                # Generate heatmap mesh based on point density
+                if generate_mesh and os.path.exists(model_file):
+                    print("\n=== Generating density heatmap on mesh ===")
+                    heatmap_mesh = create_heatmap_mesh_from_density(
+                        input_file,
+                        model_file,
+                        output_mesh,
+                        visualize=False,
+                        # sigma=mesh_sigma,
+                        interpolation_radius=mesh_interpolation_radius,
+                        ball_radius=ball_radius)
+                elif generate_mesh and not os.path.exists(model_file):
+                    print(
+                        f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
+                    )
+            else:
+                # Generate colored point cloud based on density
+                if generate_point_cloud:
+                    print("\n=== Generating density-colored point cloud ===")
+                    pcd = create_and_visualize_xyz_colored_point_cloud(
+                        input_file,
+                        output_point_cloud,
+                        visualize=False,
+                        ball_radius=parameters_dict[models][0])
+
+                # Generate heatmap mesh based on point density
+                if generate_mesh and os.path.exists(model_file):
+                    print("\n=== Generating density heatmap on mesh ===")
+                    heatmap_mesh = create_heatmap_mesh_from_density(
+                        input_file,
+                        model_file,
+                        output_mesh,
+                        visualize=False,
+                        # sigma=mesh_sigma,
+                        interpolation_radius=parameters_dict[models][1],
+                        ball_radius=parameters_dict[models][2])
+                elif generate_mesh and not os.path.exists(model_file):
+                    print(
+                        f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
+                    )
