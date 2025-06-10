@@ -118,13 +118,12 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     return pcd
 
 
-def create_heatmap_mesh_from_density(
-        input_file,
-        model_file,
-        output_file,
-        interpolation_radius=0.05,
-        visualize=True,
-        ball_radius=0.05):
+def create_heatmap_mesh_from_density(input_file,
+                                     model_file,
+                                     output_file,
+                                     interpolation_radius=0.05,
+                                     visualize=True,
+                                     ball_radius=0.05):
     """
     Generates a heatmap on a provided 3D mesh model based on the density
     of the input points, using a weighted interpolation for higher resolution.
@@ -220,7 +219,8 @@ def visualize_geometry(geometry, point_size=1.0):
     vis.destroy_window()
 
 
-def process_questionnaire_answers(qa_input_file, output_ply_file, output_lookup_csv):
+def process_questionnaire_answers(qa_input_file, output_ply_file,
+                                  output_lookup_csv):
     """
     Processes the qa.csv file to extract gazed voxel XYZ and answers.
     Assigns specific colors and color names based on predefined answer choices,
@@ -234,13 +234,28 @@ def process_questionnaire_answers(qa_input_file, output_ply_file, output_lookup_
     # Define your answer choices and map them to specific RGB colors (0-255) and color names
     # You can customize these colors and names as needed.
     answer_color_map = {
-        "Because the shape caught my attention": {"rgb": [255, 165, 0], "name": "Orange"},      # Attention to shape
-        "Because it looks beautiful or artistic": {"rgb": [0, 128, 0], "name": "Green"},         # Positive aesthetic
-        "I don't understand its meaning or use / I am thinking about it": {"rgb": [128, 0, 128], "name": "Purple"}, # Confusion/Thought
-        "Because it feels eerie / disturbing / or unsettling": {"rgb": [255, 0, 0], "name": "Red"}, # Negative feeling
-        "No specific reason / Just happened to look": {"rgb": [255, 255, 0], "name": "Yellow"},  # No specific reason
+        "Because the shape caught my attention": {
+            "rgb": [255, 165, 0],
+            "name": "Orange"
+        },  # Attention to shape
+        "Because it looks beautiful or artistic": {
+            "rgb": [0, 128, 0],
+            "name": "Green"
+        },  # Positive aesthetic
+        "I don't understand its meaning or use / I am thinking about it": {
+            "rgb": [128, 0, 128],
+            "name": "Purple"
+        },  # Confusion/Thought
+        "Because it feels eerie / disturbing / or unsettling": {
+            "rgb": [255, 0, 0],
+            "name": "Red"
+        },  # Negative feeling
+        "No specific reason / Just happened to look": {
+            "rgb": [255, 255, 0],
+            "name": "Yellow"
+        },  # No specific reason
     }
-    
+
     # Default color for answers not matching any predefined choice (e.g., light grey)
     default_color_rgb = [200, 200, 200]
     default_color_name = "Light Grey (Other)"
@@ -253,18 +268,20 @@ def process_questionnaire_answers(qa_input_file, output_ply_file, output_lookup_
         df['voxelX'] = pd.to_numeric(df['voxelX'], errors='coerce')
         df['voxelY'] = pd.to_numeric(df['voxelY'], errors='coerce')
         df['voxelZ'] = pd.to_numeric(df['voxelZ'], errors='coerce')
-        df['gazedVoxelID'] = df['gazedVoxelID'].astype(str) # Ensure ID is string for lookup
+        df['gazedVoxelID'] = df['gazedVoxelID'].astype(
+            str)  # Ensure ID is string for lookup
         # Ensure 'answer' column is string type and strip whitespace for consistent comparisons
-        df['answer'] = df['answer'].astype(str).str.strip() 
+        df['answer'] = df['answer'].astype(str).str.strip()
 
         # Drop rows with NaN in essential columns before processing
-        df = df.dropna(subset=['voxelX', 'voxelY', 'voxelZ', 'answer', 'gazedVoxelID'])
-        
+        df = df.dropna(
+            subset=['voxelX', 'voxelY', 'voxelZ', 'answer', 'gazedVoxelID'])
+
         # Initialize lists for colors and color names
-        assigned_colors_255 = [] # Store as 0-255 for Open3D PLY
+        assigned_colors_255 = []  # Store as 0-255 for Open3D PLY
         assigned_colors_01 = []  # Store as 0-1 for Open3D PLY
-        assigned_color_names = [] # Store color names for lookup CSV
-        
+        assigned_color_names = []  # Store color names for lookup CSV
+
         # Assign colors and names based on the answer
         for index, row in df.iterrows():
             answer_text = row['answer']
@@ -279,36 +296,44 @@ def process_questionnaire_answers(qa_input_file, output_ply_file, output_lookup_
                 assigned_colors_01.append(np.array(default_color_rgb) / 255.0)
                 assigned_color_names.append(default_color_name)
 
-        df['color_name'] = assigned_color_names # Add color names to DataFrame for lookup CSV
-        df['color_rgb_255'] = assigned_colors_255 # Also keep RGB for completeness in lookup if desired
+        df['color_name'] = assigned_color_names  # Add color names to DataFrame for lookup CSV
+        df['color_rgb_255'] = assigned_colors_255  # Also keep RGB for completeness in lookup if desired
 
         # Extract XYZ positions and ensure float64 type for Open3D
-        voxel_positions = df[['voxelX', 'voxelY', 'voxelZ']].values.astype(np.float64)
-        
+        voxel_positions = df[['voxelX', 'voxelY',
+                              'voxelZ']].values.astype(np.float64)
+
         # Create an Open3D point cloud for these voxels
         pcd_voxels = o3d.geometry.PointCloud()
         pcd_voxels.points = o3d.utility.Vector3dVector(voxel_positions)
-        
+
         # Assign the calculated colors (0-1 range) to the point cloud
-        pcd_voxels.colors = o3d.utility.Vector3dVector(np.array(assigned_colors_01))
-        
+        pcd_voxels.colors = o3d.utility.Vector3dVector(
+            np.array(assigned_colors_01))
+
         # Save the voxel points to a PLY file
         o3d.io.write_point_cloud(output_ply_file, pcd_voxels, write_ascii=True)
         print(f"Gazed voxel point cloud saved to: {output_ply_file}")
 
         # Save the lookup table (voxel ID, XYZ, answer, and color name) to a CSV
-        df_lookup = df[['gazedVoxelID', 'voxelX', 'voxelY', 'voxelZ', 'answer', 'color_name', 'color_rgb_255']]
+        df_lookup = df[[
+            'gazedVoxelID', 'voxelX', 'voxelY', 'voxelZ', 'answer',
+            'color_name', 'color_rgb_255'
+        ]]
         df_lookup.to_csv(output_lookup_csv, index=False)
         print(f"Voxel answer lookup table saved to: {output_lookup_csv}")
 
         return pcd_voxels
 
     except FileNotFoundError:
-        print(f"Error: QA file '{qa_input_file}' not found. Skipping voxel answer processing.")
+        print(
+            f"Error: QA file '{qa_input_file}' not found. Skipping voxel answer processing."
+        )
         return None
     except Exception as e:
         print(f"Error processing QA file {qa_input_file}: {e}")
         return None
+
 
 if __name__ == '__main__':
     curr_dir = pathlib.Path.cwd()
@@ -321,9 +346,10 @@ if __name__ == '__main__':
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = True # NEW: Flag to generate voxel answer data
+    generate_voxel_answers = True  # NEW: Flag to generate voxel answer data
 
     parameters_dict = {
+        "rembak7": [0.05, 0.05, 0.05],
         "J-7606": [0.02, 0.005, 0.02],
         "IN0295": [3, 3, 3],
         "IN0306": [2, 1, 2],
@@ -350,9 +376,10 @@ if __name__ == '__main__':
 
             # NEW: Paths for QA data
             qa_input_file = os.path.join(datafile_paths, "qa.csv")
-            output_qa_ply = os.path.join(datafile_paths, "gazed_voxels_answers.ply")
-            output_qa_lookup_csv = os.path.join(datafile_paths, "gazed_voxels_answers_lookup.csv")
-
+            output_qa_ply = os.path.join(datafile_paths,
+                                         "gazed_voxels_answers.ply")
+            output_qa_lookup_csv = os.path.join(
+                datafile_paths, "gazed_voxels_answers_lookup.csv")
 
             if (models not in parameters_dict.keys()):
                 # Generate colored point cloud based on density
@@ -378,11 +405,14 @@ if __name__ == '__main__':
                     print(
                         f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
                     )
-                
+
                 # NEW: Process and visualize questionnaire answers
                 if generate_voxel_answers:
-                    print("\n=== Processing questionnaire answers and generating voxel points ===")
-                    process_questionnaire_answers(qa_input_file, output_qa_ply, output_qa_lookup_csv)
+                    print(
+                        "\n=== Processing questionnaire answers and generating voxel points ==="
+                    )
+                    process_questionnaire_answers(qa_input_file, output_qa_ply,
+                                                  output_qa_lookup_csv)
 
             else:
                 # Generate colored point cloud based on density
@@ -408,8 +438,11 @@ if __name__ == '__main__':
                     print(
                         f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
                     )
-                
+
                 # NEW: Process and visualize questionnaire answers
                 if generate_voxel_answers:
-                    print("\n=== Processing questionnaire answers and generating voxel points ===")
-                    process_questionnaire_answers(qa_input_file, output_qa_ply, output_qa_lookup_csv)
+                    print(
+                        "\n=== Processing questionnaire answers and generating voxel points ==="
+                    )
+                    process_questionnaire_answers(qa_input_file, output_qa_ply,
+                                                  output_qa_lookup_csv)
