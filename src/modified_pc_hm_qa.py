@@ -346,7 +346,7 @@ if __name__ == '__main__':
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = True  # NEW: Flag to generate voxel answer data
+    generate_voxel_answers = True
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
@@ -374,7 +374,6 @@ if __name__ == '__main__':
             model_file = os.path.join(datafile_paths, "model.obj")
             output_mesh = os.path.join(datafile_paths, "heatmap_viz.ply")
 
-            # NEW: Paths for QA data
             qa_input_file = os.path.join(datafile_paths, "qa.csv")
             output_qa_ply = os.path.join(datafile_paths,
                                          "gazed_voxels_answers.ply")
@@ -406,7 +405,6 @@ if __name__ == '__main__':
                         f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
                     )
 
-                # NEW: Process and visualize questionnaire answers
                 if generate_voxel_answers:
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
@@ -439,7 +437,6 @@ if __name__ == '__main__':
                         f"Error: Model file '{model_file}' not found. Skipping heatmap mesh generation."
                     )
 
-                # NEW: Process and visualize questionnaire answers
                 if generate_voxel_answers:
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
