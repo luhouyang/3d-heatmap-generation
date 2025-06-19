@@ -88,6 +88,9 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
         print(f"Error loading data from {input_file}: {e}")
         return None
 
+    if (data.ndim == 1):
+        return
+    
     positions = data[:, :3]  # Extract XYZ coordinates
 
     # Create an Open3d point cloud object
@@ -139,6 +142,10 @@ def create_heatmap_mesh_from_density(input_file,
         mesh: The created Open3D mesh object with density colors.
     """
     data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+
+    if (data.ndim == 1):
+        return
+    
     positions = data[:, :3]  # Extract XYZ coordinates
 
     # Create an Open3D point cloud object
