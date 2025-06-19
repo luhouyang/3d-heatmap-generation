@@ -241,23 +241,23 @@ def process_questionnaire_answers(qa_input_file, output_ply_file,
     # Define your answer choices and map them to specific RGB colors (0-255) and color names
     # You can customize these colors and names as needed.
     answer_color_map = {
-        "Because the shape caught my attention": {
+        "1 面白い／気になる形だと感じた": {
             "rgb": [255, 165, 0],
             "name": "Orange"
         },  # Attention to shape
-        "Because it looks beautiful or artistic": {
+        "2 美しい／芸術的だと感じた": {
             "rgb": [0, 128, 0],
             "name": "Green"
         },  # Positive aesthetic
-        "I don't understand its meaning or use / I am thinking about it": {
+        "3 疑問／不思議／意味不明と感じた": {
             "rgb": [128, 0, 128],
             "name": "Purple"
         },  # Confusion/Thought
-        "Because it feels eerie / disturbing / or unsettling": {
+        "4 不安・不気味・怖いと感じた": {
             "rgb": [255, 0, 0],
             "name": "Red"
         },  # Negative feeling
-        "No specific reason / Just happened to look": {
+        "5 なんとなく見ていた": {
             "rgb": [255, 255, 0],
             "name": "Yellow"
         },  # No specific reason
