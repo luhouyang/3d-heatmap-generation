@@ -32,7 +32,7 @@ def gaussian_blur_density(positions, sigma):
 
 def calculate_point_density(pcd, ball_radius):
     """
-    Calculate point density using Open3D's KDTree for radius search.
+    Calculate point density using Open33D's KDTree for radius search.
     
     Args:
         pcd: Open3D point cloud object
@@ -65,9 +65,9 @@ def calculate_point_density(pcd, ball_radius):
 
 
 def create_and_visualize_xyz_colored_point_cloud(input_file,
-                                                 output_file,
-                                                 ball_radius=10,
-                                                 visualize=True):
+                                                  output_file,
+                                                  ball_radius=10,
+                                                  visualize=True):
     """
     Creates and visualizes a point cloud from XYZ data in a CSV file,
     coloring points based on their local density using a KD-tree for radius search.
@@ -226,20 +226,23 @@ def visualize_geometry(geometry, point_size=1.0):
     vis.destroy_window()
 
 
-def process_questionnaire_answers(qa_input_file, output_ply_file,
-                                  output_lookup_csv):
+def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
+                                  output_lookup_csv, output_segmented_meshes_dir,
+                                  output_combined_mesh_file):
     """
     Processes the qa.csv file to extract gazed voxel XYZ and answers.
     Assigns specific colors and color names based on predefined answer choices,
-    generates a PLY point cloud with these colors, and a lookup CSV including the color name.
+    generates a PLY point cloud with these colors, a lookup CSV including the color name,
+    segmented meshes for each answer category, and a single combined mesh colored by answers.
 
     Args:
         qa_input_file (str): Path to the qa.csv file.
+        model_file (str): Path to the base mesh model file (e.g., model.obj).
         output_ply_file (str): Path to save the PLY file for gazed voxels.
         output_lookup_csv (str): Path to save the CSV lookup file.
+        output_segmented_meshes_dir (str): Directory to save the segmented mesh files.
+        output_combined_mesh_file (str): Path to save the combined mesh.
     """
-    # Define your answer choices and map them to specific RGB colors (0-255) and color names
-    # You can customize these colors and names as needed.
     answer_color_map = {
         "左 面白い／気になる形だと感じた": {
             "rgb": [255, 165, 0],
@@ -263,26 +266,29 @@ def process_questionnaire_answers(qa_input_file, output_ply_file,
         },  # No specific reason
     }
 
-    # Default color for answers not matching any predefined choice (e.g., light grey)
     default_color_rgb = [200, 200, 200]
     default_color_name = "Light Grey (Other)"
 
     try:
-        # Load the data using pandas, assuming first row is header
         df = pd.read_csv(qa_input_file, sep=',', header=0)
 
         # Ensure numeric columns are properly typed, coercing errors
-        df['voxelX'] = pd.to_numeric(df['voxelX'], errors='coerce')
-        df['voxelY'] = pd.to_numeric(df['voxelY'], errors='coerce')
-        df['voxelZ'] = pd.to_numeric(df['voxelZ'], errors='coerce')
-        df['gazedVoxelID'] = df['gazedVoxelID'].astype(
-            str)  # Ensure ID is string for lookup
-        # Ensure 'answer' column is string type and strip whitespace for consistent comparisons
+        df['estX'] = pd.to_numeric(df['estX'], errors='coerce')
+        df['estY'] = pd.to_numeric(df['estY'], errors='coerce')
+        df['estZ'] = pd.to_numeric(df['estZ'], errors='coerce')
+        df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce') # Make sure timestamp is numeric
+
         df['answer'] = df['answer'].astype(str).str.strip()
 
         # Drop rows with NaN in essential columns before processing
-        df = df.dropna(
-            subset=['voxelX', 'voxelY', 'voxelZ', 'answer', 'gazedVoxelID'])
+        df = df.dropna(subset=['estX', 'estY', 'estZ', 'answer', 'timestamp'])
+
+        # Create a combined 'gazedVoxelID' from estX, estY, estZ and timestamp
+        # This creates a unique identifier for each gaze point that can be associated with an answer
+        df['gazedVoxelID'] = df['estX'].astype(str) + '_' + \
+                             df['estY'].astype(str) + '_' + \
+                             df['estZ'].astype(str) + '_' + \
+                             df['timestamp'].astype(str)
 
         # Initialize lists for colors and color names
         assigned_colors_255 = []  # Store as 0-255 for Open3D PLY
@@ -307,8 +313,7 @@ def process_questionnaire_answers(qa_input_file, output_ply_file,
         df['color_rgb_255'] = assigned_colors_255  # Also keep RGB for completeness in lookup if desired
 
         # Extract XYZ positions and ensure float64 type for Open3D
-        voxel_positions = df[['voxelX', 'voxelY',
-                              'voxelZ']].values.astype(np.float64)
+        voxel_positions = df[['estX', 'estY', 'estZ']].values.astype(np.float64)
 
         # Create an Open3D point cloud for these voxels
         pcd_voxels = o3d.geometry.PointCloud()
@@ -324,11 +329,109 @@ def process_questionnaire_answers(qa_input_file, output_ply_file,
 
         # Save the lookup table (voxel ID, XYZ, answer, and color name) to a CSV
         df_lookup = df[[
-            'gazedVoxelID', 'voxelX', 'voxelY', 'voxelZ', 'answer',
+            'gazedVoxelID', 'estX', 'estY', 'estZ', 'answer',
             'color_name', 'color_rgb_255'
         ]]
         df_lookup.to_csv(output_lookup_csv, index=False)
         print(f"Voxel answer lookup table saved to: {output_lookup_csv}")
+
+        # --- Mesh Processing ---
+        # Load the base mesh for segmentation and combined mesh
+        if not os.path.exists(model_file):
+            print(f"Error: Base model file '{model_file}' not found. Cannot perform mesh operations.")
+            return pcd_voxels
+
+        base_mesh = o3d.io.read_triangle_mesh(model_file)
+        base_vertices = np.asarray(base_mesh.vertices)
+        
+        # Create a KDTree for the gaze points for efficient searching
+        gaze_kdtree = KDTree(voxel_positions)
+
+        # Initialize colors for the combined mesh
+        # Default to a neutral color (e.g., light gray or black) for parts of the mesh not gazed upon
+        combined_mesh_vertex_colors = np.full_like(base_vertices, [0.0, 0.0, 0.0]) # Start with black
+
+        # Define a radius to associate gaze points with mesh vertices
+        # This radius needs to be tuned based on the scale of your model and gaze data
+        association_radius = 50.0 # Example radius, adjust as needed
+
+        print("\n=== Generating combined mesh colored by questionnaire answers ===")
+        # Iterate through each vertex of the base mesh
+        for i, vertex in enumerate(tqdm(base_vertices, desc="Coloring combined mesh")):
+            # Find all gaze points within the association radius of the current mesh vertex
+            nearby_gaze_indices = gaze_kdtree.query_ball_point(vertex, association_radius)
+            
+            if nearby_gaze_indices:
+                # If there are nearby gaze points, determine the dominant color/answer
+                # For simplicity, we'll average the colors of nearby gaze points
+                # A more complex approach might involve weighting by inverse distance or voting
+                
+                # Get the colors (0-1 range) of the nearby gaze points
+                nearby_colors_01 = np.array([assigned_colors_01[j] for j in nearby_gaze_indices])
+                
+                # Calculate the average color
+                averaged_color = np.mean(nearby_colors_01, axis=0)
+                combined_mesh_vertex_colors[i] = averaged_color
+            else:
+                # If no gaze points are nearby, keep the vertex black (or default color)
+                combined_mesh_vertex_colors[i] = [0.0, 0.0, 0.0] # Black for un-gazed areas
+
+        # Assign the calculated colors to the combined mesh
+        base_mesh.vertex_colors = o3d.utility.Vector3dVector(combined_mesh_vertex_colors)
+
+        # Save the combined mesh
+        o3d.io.write_triangle_mesh(output_combined_mesh_file, base_mesh, write_ascii=True)
+        print(f"Combined mesh saved to: {output_combined_mesh_file}")
+
+        # Optional: Visualize the combined mesh
+        # visualize_geometry(base_mesh) # Uncomment to visualize the combined mesh
+
+        # Segmentation and Individual Segmented Mesh Generation
+        # Create output directory for segmented meshes if it doesn't exist
+        os.makedirs(output_segmented_meshes_dir, exist_ok=True)
+
+        # Process each unique answer category for individual segmented meshes
+        unique_answers = df['answer'].unique()
+        for answer_category in unique_answers:
+            print(f"Segmenting mesh for answer: '{answer_category}'")
+            category_df = df[df['answer'] == answer_category]
+            if category_df.empty:
+                continue
+
+            # Extract positions for this answer category
+            category_gaze_positions = category_df[['estX', 'estY', 'estZ']].values.astype(np.float64)
+            if len(category_gaze_positions) == 0:
+                continue
+
+            # Create a KDTree for the gaze points of this category
+            category_tree = KDTree(category_gaze_positions)
+
+            # Determine color for this category
+            category_color_info = answer_color_map.get(answer_category, {"rgb": default_color_rgb, "name": default_color_name})
+            category_rgb_01 = np.array(category_color_info["rgb"]) / 255.0
+
+            # Create a copy of the base mesh for this segment
+            segmented_mesh = o3d.geometry.TriangleMesh(base_mesh) # Use base_mesh to copy its structure
+            segmented_mesh.paint_uniform_color([0.0, 0.0, 0.0]) # Start with black for transparent background
+
+            # Iterate through base mesh vertices to color them based on proximity to gaze points
+            mesh_vertex_colors = np.asarray(segmented_mesh.vertex_colors)
+            for i, vertex in enumerate(tqdm(base_vertices, desc=f"Coloring mesh for {answer_category}")):
+                # Find if this mesh vertex is close to any gaze point for this answer category
+                search_radius = 50.0 # Adjust this radius based on your data's spatial distribution
+                nearby_gaze_indices = category_tree.query_ball_point(vertex, search_radius)
+
+                if nearby_gaze_indices:
+                    # If nearby gaze points exist for this category, color the vertex with the category's color
+                    mesh_vertex_colors[i] = category_rgb_01
+                # Else, the vertex remains black (or transparent in visualization)
+
+            segmented_mesh.vertex_colors = o3d.utility.Vector3dVector(mesh_vertex_colors)
+
+            # Save the segmented mesh
+            output_segmented_mesh_path = os.path.join(output_segmented_meshes_dir, f"{category_color_info['name'].replace(' ', '_')}_mesh.ply") # Changed extension to .ply for consistency
+            o3d.io.write_triangle_mesh(output_segmented_mesh_path, segmented_mesh, write_ascii=True)
+            print(f"Segmented mesh for '{answer_category}' saved to: {output_segmented_mesh_path}")
 
         return pcd_voxels
 
@@ -354,6 +457,8 @@ if __name__ == '__main__':
     generate_point_cloud = True
     generate_mesh = True
     generate_voxel_answers = True
+    generate_segmented_meshes = True
+    generate_combined_mesh = True
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
@@ -386,6 +491,9 @@ if __name__ == '__main__':
                                          "gazed_voxels_answers.ply")
             output_qa_lookup_csv = os.path.join(
                 datafile_paths, "gazed_voxels_answers_lookup.csv")
+            output_segmented_meshes_dir = os.path.join(datafile_paths, "segmented_meshes")
+            output_combined_mesh_file = os.path.join(datafile_paths, "combined_qa_mesh.ply")
+
 
             if (models not in parameters_dict.keys()):
                 # Generate colored point cloud based on density
@@ -416,8 +524,9 @@ if __name__ == '__main__':
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
                     )
-                    process_questionnaire_answers(qa_input_file, output_qa_ply,
-                                                  output_qa_lookup_csv)
+                    process_questionnaire_answers(qa_input_file, model_file, output_qa_ply,
+                                                  output_qa_lookup_csv, output_segmented_meshes_dir,
+                                                  output_combined_mesh_file)
 
             else:
                 # Generate colored point cloud based on density
@@ -448,5 +557,6 @@ if __name__ == '__main__':
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
                     )
-                    process_questionnaire_answers(qa_input_file, output_qa_ply,
-                                                  output_qa_lookup_csv)
+                    process_questionnaire_answers(qa_input_file, model_file, output_qa_ply,
+                                                  output_qa_lookup_csv, output_segmented_meshes_dir,
+                                                  output_combined_mesh_file)
