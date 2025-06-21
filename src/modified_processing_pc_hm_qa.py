@@ -244,23 +244,23 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         output_combined_mesh_file (str): Path to save the combined mesh.
     """
     answer_color_map = {
-        "左 面白い／気になる形だと感じた": {
+        "面白い・気になる形だ": {
             "rgb": [255, 165, 0],
             "name": "Orange"
         },  # Attention to shape
-        "右 美しい／芸術的だと感じた": {
+        "美しい・芸術的だ": {
             "rgb": [0, 128, 0],
             "name": "Green"
         },  # Positive aesthetic
-        "上 疑問／不思議／意味不明と感じた": {
+        "不思議・意味不明": {
             "rgb": [128, 0, 128],
             "name": "Purple"
         },  # Confusion/Thought
-        "下 不安・不気味・怖いと感じた": {
+        "不気味・不安・怖い": {
             "rgb": [255, 0, 0],
             "name": "Red"
         },  # Negative feeling
-        "中 なんとなく見ていた": {
+        "何も感じない": {
             "rgb": [255, 255, 0],
             "name": "Yellow"
         },  # No specific reason
