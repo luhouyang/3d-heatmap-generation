@@ -453,6 +453,8 @@ if __name__ == '__main__':
     mesh_interpolation_radius = 10  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
+    viz = True
+
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
@@ -463,14 +465,14 @@ if __name__ == '__main__':
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
         "J-7606": [0.02, 0.005, 0.02],
-        "IN0295": [3, 3, 3],
-        "IN0306": [2, 1, 2],
-        "NZ0001": [3, 1, 3],
-        "SK0035": [5, 3, 5],
-        "MH0037": [3, 1, 3],
-        "NM0239": [3, 1, 3],
-        "TK0020": [2, 0.8, 2],
-        "UD0028": [6, 2, 6],
+        "IN0295(86)": [5, 5, 5],
+        "IN0306(87)": [3, 1.5, 3],
+        "NZ0001(90)": [3, 1.5, 3],
+        "SK0035(91)": [7, 5, 7],
+        "MH0037(88)": [3, 1.5, 3],
+        "NM0239(89)": [3, 1.5, 3],
+        "TK0020(92)": [3, 1.25, 3],
+        "UD0028(93)": [6, 2, 6],
     }
 
     session_paths = curr_dir / pathlib.Path('src/data')
@@ -502,7 +504,7 @@ if __name__ == '__main__':
                     pcd = create_and_visualize_xyz_colored_point_cloud(
                         input_file,
                         output_point_cloud,
-                        visualize=False,
+                        visualize=viz,
                         ball_radius=point_cloud_ball_radius)
 
                 # Generate heatmap mesh based on point density
@@ -512,7 +514,7 @@ if __name__ == '__main__':
                         input_file,
                         model_file,
                         output_mesh,
-                        visualize=False,
+                        visualize=viz,
                         interpolation_radius=mesh_interpolation_radius,
                         ball_radius=ball_radius)
                 elif generate_mesh and not os.path.exists(model_file):
@@ -535,7 +537,7 @@ if __name__ == '__main__':
                     pcd = create_and_visualize_xyz_colored_point_cloud(
                         input_file,
                         output_point_cloud,
-                        visualize=False,
+                        visualize=viz,
                         ball_radius=parameters_dict[models][0])
 
                 # Generate heatmap mesh based on point density
@@ -545,7 +547,7 @@ if __name__ == '__main__':
                         input_file,
                         model_file,
                         output_mesh,
-                        visualize=False,
+                        visualize=viz,
                         interpolation_radius=parameters_dict[models][1],
                         ball_radius=parameters_dict[models][2])
                 elif generate_mesh and not os.path.exists(model_file):
