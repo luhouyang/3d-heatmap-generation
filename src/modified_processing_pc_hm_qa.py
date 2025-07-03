@@ -453,7 +453,7 @@ if __name__ == '__main__':
     mesh_interpolation_radius = 10  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
-    viz = True
+    viz = False
 
     # Choose what to generate
     generate_point_cloud = True
