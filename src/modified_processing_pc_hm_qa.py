@@ -33,7 +33,7 @@ def gaussian_blur_density(positions, sigma):
 
 def calculate_point_density(pcd, ball_radius):
     """
-    Calculate point density using Open33D's KDTree for radius search.
+    Calculate point density using Open3D's KDTree for radius search.
     
     Args:
         pcd: Open3D point cloud object
