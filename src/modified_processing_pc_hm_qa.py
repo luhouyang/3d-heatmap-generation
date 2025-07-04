@@ -463,9 +463,9 @@ if __name__ == '__main__':
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = False
-    generate_segmented_meshes = False
-    generate_combined_mesh = False
+    generate_voxel_answers = True
+    generate_segmented_meshes = True
+    generate_combined_mesh = True
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
