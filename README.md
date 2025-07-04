@@ -14,7 +14,31 @@ into
 
 **PyTorch Dataset & DataLoader**
 
-Template to load the processed data into PyTorch for model training
+Template to load the processed data into PyTorch for model training.
+
+Functions
+
+- Filter data based on
+
+    - Group
+
+    - Session ID
+
+    - Pottery / Dogu ID
+
+    - Point cloud data size
+
+    - QNA data size
+
+    - Voice quallity, 1 - 5
+
+    - Languange, JP | EN
+
+- Generate filtered data statistics
+
+- Pre-process OR In-time process data
+
+- TO BE ADDED: voice quality enhancement (normalization, background noise removal, AI to isolate comments)
 
 ## Clone the latest version
 
@@ -24,7 +48,7 @@ git clone --depth 1 https://github.com/luhouyang/3d-heatmap-generation.git
 
 ## PyTorch Dataset & DataLoader
 
-[**SCRIPT**](src/dataset.py)
+[**SCRIPT**](src/dataset/dataset.py)
 
 ## Processing & Visualization Scripts
 

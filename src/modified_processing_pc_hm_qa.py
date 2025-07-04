@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 import pathlib
 import pandas as pd
+import polars as pl
 
 
 def gaussian_blur_density(positions, sigma):
@@ -83,10 +84,13 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     """
     # Load data from the CSV file
     try:
-        data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+        # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+        data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
+        
     except Exception as e:
         print(f"Error loading data from {input_file}: {e}")
         return None
+    
 
     if (data.ndim == 1):
         return
@@ -141,7 +145,8 @@ def create_heatmap_mesh_from_density(input_file,
     Returns:
         mesh: The created Open3D mesh object with density colors.
     """
-    data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+    # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
+    data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
 
     if (data.ndim == 1):
         return
@@ -458,9 +463,9 @@ if __name__ == '__main__':
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = True
-    generate_segmented_meshes = True
-    generate_combined_mesh = True
+    generate_voxel_answers = False
+    generate_segmented_meshes = False
+    generate_combined_mesh = False
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
@@ -474,6 +479,9 @@ if __name__ == '__main__':
         "TK0020(92)": [3, 1.25, 3],
         "UD0028(93)": [6, 2, 6],
     }
+
+    import time
+    ts = time.time_ns()
 
     session_paths = curr_dir / pathlib.Path('src/data')
     for sessions in os.listdir(session_paths):
@@ -562,3 +570,7 @@ if __name__ == '__main__':
                     process_questionnaire_answers(qa_input_file, model_file, output_qa_ply,
                                                   output_qa_lookup_csv, output_segmented_meshes_dir,
                                                   output_combined_mesh_file)
+                    
+    te = time.time_ns()
+
+    print(f"TOTAL TIME: {(te - ts)/10e8}")
