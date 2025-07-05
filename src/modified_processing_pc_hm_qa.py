@@ -8,6 +8,8 @@ import pathlib
 import pandas as pd
 import polars as pl
 
+cmap = plt.get_cmap('jet')
+
 
 def gaussian_blur_intensity(positions, sigma):
     """Applies Gaussian blur to estimate point intensity."""
@@ -25,10 +27,11 @@ def gaussian_blur_intensity(positions, sigma):
     min_intensity = np.min(intensity)
     max_intensity = np.max(intensity)
     normalized_intensity = (intensity - min_intensity) / (
-        max_intensity -
-        min_intensity) if max_intensity > min_intensity else np.zeros_like(intensity)
+        max_intensity - min_intensity
+    ) if max_intensity > min_intensity else np.zeros_like(intensity)
 
     return normalized_intensity
+
 
 # Read about KD-Tree (Medium | EN): https://medium.com/@isurangawarnasooriya/exploring-kd-trees-a-comprehensive-guide-to-implementation-and-applications-in-python-3385fd56a246
 # Read about KD-Tree (Qiita | JP): https://qiita.com/RAD0N/items/7a192a4a5351f481c99f
@@ -65,8 +68,8 @@ def calculate_point_intensity(pcd, ball_radius):
     min_intensity = np.min(intensity)
     max_intensity = np.max(intensity)
     normalized_intensity = (intensity - min_intensity) / (
-        max_intensity -
-        min_intensity) if max_intensity > min_intensity else np.zeros_like(intensity)
+        max_intensity - min_intensity
+    ) if max_intensity > min_intensity else np.zeros_like(intensity)
 
     return normalized_intensity
 
@@ -91,8 +94,8 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     # Load data from the CSV file
     try:
         # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
-        data = pl.read_csv(input_file, skip_lines=1,
-                           has_header=False).to_numpy()
+        data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
+        # data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
 
     except Exception as e:
         print(f"Error loading data from {input_file}: {e}")
@@ -107,17 +110,19 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(positions)
 
-    # Use the previously calculated average distance to set a default ball_radius
-    distances = pcd.compute_nearest_neighbor_distance()
-    avg_distance = np.mean(distances)
-    if ball_radius <= 0:
-        ball_radius = avg_distance * 2
+    # # Use the previously calculated average distance to set a default ball_radius
+    # # Further investigation will be done to evaluate if this should be included in the final dataset code
+    # distances = pcd.compute_nearest_neighbor_distance()
+    # avg_distance = np.mean(distances)
+    # if ball_radius <= 0:
+    #     ball_radius = avg_distance * 2
 
     # Calculate intensity
     normalized_intensity = calculate_point_intensity(pcd, ball_radius)
 
     # Use the 'jet' colormap from matplotlib to map intensity to colors
-    colors = plt.get_cmap('jet')(normalized_intensity)[:, :3]  # Get RGB values
+    # colors = plt.get_cmap('jet')(normalized_intensity)[:, :3] # Get RGB values
+    colors = cmap(normalized_intensity)[:, :3]
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
     # Save the point cloud to a PLY file
@@ -132,11 +137,11 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
 
 
 def create_heatmap_mesh_from_intensity(input_file,
-                                     model_file,
-                                     output_file,
-                                     interpolation_radius=0.05,
-                                     visualize=True,
-                                     ball_radius=0.05):
+                                       model_file,
+                                       output_file,
+                                       interpolation_radius=0.05,
+                                       visualize=True,
+                                       ball_radius=0.05):
     """
     Generates a heatmap on a provided 3D mesh model based on the intensity
     of the input points, using a weighted interpolation for higher resolution.
@@ -152,7 +157,8 @@ def create_heatmap_mesh_from_intensity(input_file,
         mesh: The created Open3D mesh object with intensity colors.
     """
     # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
-    data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
+    data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
+    # data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
 
     if (data.ndim == 1):
         return
@@ -180,7 +186,7 @@ def create_heatmap_mesh_from_intensity(input_file,
     # Build KDTree for efficient nearest neighbor search
     tree = KDTree(positions)
     colors = np.zeros((n_vertices, 3))
-    cmap = plt.get_cmap("jet")
+    # cmap = plt.get_cmap("jet")
 
     for i in tqdm(range(n_vertices), desc="Applying intensity to mesh"):
         vertex = vertices[i]
@@ -196,7 +202,8 @@ def create_heatmap_mesh_from_intensity(input_file,
                 weights.append(1.0 / (distance + 1e-6))
             weights = np.array(weights)
             weighted_densities = weights * point_intensity[nearby_point_indices]
-            interpolated_intensity = np.sum(weighted_densities) / np.sum(weights)
+            interpolated_intensity = np.sum(weighted_densities) / np.sum(
+                weights)
             colors[i, :] = cmap(interpolated_intensity)[:3]
         else:
             colors[i, :] = [0.0, 0.0, 0.3]  # This adds a dark blue background
@@ -497,14 +504,14 @@ if __name__ == '__main__':
     mesh_interpolation_radius = 10  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
-    viz = True
+    viz = False
 
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = True
-    generate_segmented_meshes = True
-    generate_combined_mesh = True
+    generate_voxel_answers = False
+    generate_segmented_meshes = False
+    generate_combined_mesh = False
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],

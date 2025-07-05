@@ -18,7 +18,7 @@ import os
 import pathlib
 
 import numpy as np
-import polars as pl
+import pandas as pd
 import open3d as o3d
 
 import matplotlib.pyplot as plt
@@ -26,8 +26,11 @@ import matplotlib.pyplot as plt
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+# Color mapping
+CMAP = plt.get_cmap('jet')
+
 # Pottery & Dogu assigned numbers
-assigned_numbers_dict = {
+ASSIGNED_NUMBERS_DICT = {
     'AS0001': '1',
     'FH0008': '2',
     'IN0003': '3',
@@ -135,7 +138,7 @@ def calculate_point_intensity(pcd, ball_radius):
 
     Args:
         pcd: Open3D point cloud object
-        ball_radius: Radius for neighborhood search
+        ball_radius (float): Radius for neighborhood search
 
     Returns:
         normalized_intensity: Array of normalized intensity values
@@ -181,8 +184,38 @@ def filter_data_on():
 
 
 def create_gaze_intensity_point_cloud(input_file, ball_radius):
-    pass
+    """
+    Creates a point cloud from xyz data in CSV file,
+    coloring points based on their normalized intensity using a KD-tree for radius search.
 
+    Args:
+        input_file (str): Path to the input CSV file containing point cloud data
+        ball_radius (float): Radius of the sphere used for neighborhood search
+
+    Returns:
+        pcd: The created Open3D pint cloud object
+    """
+    data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
+
+    positions = data[:, :3]  # Only xyz
+
+    # Create an Open3D point cloud object
+    # Open3D docs: https://www.open3d.org/docs/latest/python_api/open3d.geometry.PointCloud.html
+    pcd = o3d.geometry.PointCloud()
+
+    # PointCloud.points accepts float64 of c=shape (num_points, 3)
+    # Vector3dVector converts float64 numpy array of shape (n, 3) to Open3D format
+    # Vector3dVector docs: https://www.open3d.org/docs/release/python_api/open3d.utility.Vector3dVector.html
+    pcd.points = o3d.utility.Vector3dVector(positions)
+
+    # Calculate intensity
+    normalized_intensity = calculate_point_intensity(pcd, ball_radius)
+
+    # Get color based on normalized intensity
+    colors = CMAP(normalized_intensity)[:, :3]
+    pcd.colors = o3d.utility.Vector3dVecctor(colors)
+    
+    return pcd
 
 def create_gaze_intensity_heatmap_mesh(input_file, model_file,
                                        interpolation_radius, ball_radius):
