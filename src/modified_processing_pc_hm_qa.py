@@ -169,11 +169,11 @@ def create_heatmap_mesh_from_intensity(input_file,
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(positions)
 
-    # Use the previously calculated average distance to set a default ball_radius
-    distances = pcd.compute_nearest_neighbor_distance()
-    avg_distance = np.mean(distances)
-    if ball_radius <= 0:
-        ball_radius = avg_distance * 10
+    # # Use the previously calculated average distance to set a default ball_radius
+    # distances = pcd.compute_nearest_neighbor_distance()
+    # avg_distance = np.mean(distances)
+    # if ball_radius <= 0:
+    #     ball_radius = avg_distance * 10
 
     # Calculate intensity
     point_intensity = calculate_point_intensity(pcd, ball_radius)
@@ -196,17 +196,19 @@ def create_heatmap_mesh_from_intensity(input_file,
 
         # Weighted interpolation
         if nearby_point_indices:
-            weights = []
-            for point_index in nearby_point_indices:
-                distance = np.linalg.norm(vertex - positions[point_index])
-                weights.append(1.0 / (distance + 1e-6))
-            weights = np.array(weights)
-            weighted_densities = weights * point_intensity[nearby_point_indices]
-            interpolated_intensity = np.sum(weighted_densities) / np.sum(
-                weights)
-            colors[i, :] = cmap(interpolated_intensity)[:3]
+            # weights = []
+            # for point_index in nearby_point_indices:
+            #     distance = np.linalg.norm(vertex - positions[point_index])
+            #     weights.append(1.0 / (distance + 1e-6))
+            # weights = np.array(weights)
+            # weighted_densities = weights * point_intensity[nearby_point_indices]
+            # interpolated_intensity = np.sum(weighted_densities) / np.sum(
+            #     weights)
+            # colors[i, :] = cmap(interpolated_intensity)[:3]
+
+            colors[i, :] = cmap(point_intensity[nearby_point_indices][0])[:3]
         else:
-            colors[i, :] = [0.0, 0.0, 0.3]  # This adds a dark blue background
+            colors[i, :] = [0.0, 0.0, 0.0]  # This adds a dark blue background
 
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
@@ -501,7 +503,7 @@ if __name__ == '__main__':
 
     # Parameters
     point_cloud_ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
-    mesh_interpolation_radius = 10  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
+    mesh_interpolation_radius = 5  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
     viz = False
@@ -509,9 +511,9 @@ if __name__ == '__main__':
     # Choose what to generate
     generate_point_cloud = True
     generate_mesh = True
-    generate_voxel_answers = False
-    generate_segmented_meshes = False
-    generate_combined_mesh = False
+    generate_voxel_answers = True
+    generate_segmented_meshes = True
+    generate_combined_mesh = True
 
     parameters_dict = {
         "rembak7": [0.05, 0.05, 0.05],
