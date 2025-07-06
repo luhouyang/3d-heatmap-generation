@@ -23,7 +23,6 @@ import open3d as o3d
 
 import matplotlib.pyplot as plt
 
-from scipy.spatial import KDTree
 from tqdm import tqdm
 
 # Colors
@@ -133,7 +132,7 @@ ASSIGNED_NUMBERS_DICT = {
 # yapf: disable
 # Read about KD-Tree (Medium | EN): https://medium.com/@isurangawarnasooriya/exploring-kd-trees-a-comprehensive-guide-to-implementation-and-applications-in-python-3385fd56a246
 # Read about KD-Tree (Qiita | JP): https://qiita.com/RAD0N/items/7a192a4a5351f481c99f
-def calculate_point_intensity(pcd, ball_radius):
+def calculate_normalized_point_intensity(pcd, ball_radius):
     """
     Calculate point intensity using Open3D KDTree for ball radius search.
 
@@ -144,7 +143,7 @@ def calculate_point_intensity(pcd, ball_radius):
     Returns:
         normalized_intensity: Array of normalized intensity values
     """
-    # Build a KD-tree with FLANN for efficient radius search
+    # Build a KD-Tree with FLANN for efficient radius search
     # Open3D docs: https://www.open3d.org/docs/release/tutorial/geometry/kdtree.html
     # FLANN docs: https://www.cs.ubc.ca/research/flann/
     kdtree = o3d.geometry.KDTreeFlann(pcd)
@@ -210,7 +209,7 @@ def create_gaze_intensity_point_cloud(input_file, ball_radius):
     pcd.points = o3d.utility.Vector3dVector(positions)
 
     # Calculate intensity
-    normalized_intensity = calculate_point_intensity(pcd, ball_radius)
+    normalized_intensity = calculate_normalized_point_intensity(pcd, ball_radius)
 
     # Get color based on normalized intensity
     colors = CMAP(normalized_intensity)[:, :3]
@@ -218,7 +217,7 @@ def create_gaze_intensity_point_cloud(input_file, ball_radius):
 
     return pcd
 
-
+# yapf: disable
 def create_gaze_intensity_heatmap_mesh(
     input_file,
     model_file,
@@ -239,14 +238,36 @@ def create_gaze_intensity_heatmap_mesh(
     pcd.points = o3d.utility.Vector3dVector(positions)
 
     # Calculate intensity
-    normalized_intensity = calculate_point_intensity(pcd, ball_radius)
+    normalized_intensity = calculate_normalized_point_intensity(pcd, ball_radius)
 
     # Load the mesh (OBJ or PLY) to apply the normalized intensity to
     mesh = o3d.io_read_triangle_mesh(model_file)
     vertices = np.asarray(mesh.vertices)
     n_vertices = vertices.shape[0]
 
-def create_qna_segmentation_mesh(input_file, model_file):
+    # Build KD-Tree for efficient radius search
+    # Color the mesh based on normalized intensity with a circular interpolation
+    # Modify radius later based on the eye gaze error / range
+    kdtree = o3d.geometry.KDTreeFlann(pcd)
+    colors = np.zeros((n_vertices, 3))
+
+    # Find points on model mesh that are close to the eye gaze intensity point cloud
+    for i, vertex in enumerate(vertices):
+        [k, idx, _] = kdtree.search_radius_vector_3d(vertex, interpolation_radius)
+
+        if idx:
+            # Assign color to the points on model mesh within interpolation radius
+            # Based on the average intensity of points within interpolation radius
+            colors[i, :] = CMAP(np.average(normalized_intensity[idx]))[:3]
+        else:
+            colors[i, :] = BASE_COLOR
+
+    mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+
+    return mesh
+# yapf: enable
+
+def create_qna_segmentation_mesh(input_file, model_file, association_radius):
     pass
 
 
@@ -258,4 +279,16 @@ def process_voice_data(input_file):
 
 
 def visualize_geometry(geometry, point_size=1.0):
-    pass
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.add_geometry(geometry)
+    render_options = vis.get_render_options()
+
+    if isinstance(geometry, o3d.geometry.PointCloud):
+        render_options.point_size = point_size
+    elif isinstance(geometry, o3d.geometry.TriangleMesh):
+        render_options.mesh_show_back_face = True
+    
+    render_options.background_color = np.asarray([0.1, 0.1, 0.1])
+    vis.run()
+    vis.destroy_window()

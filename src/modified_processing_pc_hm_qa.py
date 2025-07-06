@@ -1,7 +1,7 @@
 import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial import KDTree
+# from scipy.spatial import KDTree
 from tqdm import tqdm
 import os
 import pathlib
@@ -10,27 +10,26 @@ import polars as pl
 
 cmap = plt.get_cmap('jet')
 
+# def gaussian_blur_intensity(positions, sigma):
+#     """Applies Gaussian blur to estimate point intensity."""
+#     n_points = len(positions)
+#     intensity = np.zeros(n_points)
+#     tree = KDTree(positions)
+#     radius = 3 * sigma
 
-def gaussian_blur_intensity(positions, sigma):
-    """Applies Gaussian blur to estimate point intensity."""
-    n_points = len(positions)
-    intensity = np.zeros(n_points)
-    tree = KDTree(positions)
-    radius = 3 * sigma
+#     for i in tqdm(range(n_points), desc="Calculating Gaussian intensity"):
+#         neighbors_idx = tree.query_ball_point(positions[i], radius)
+#         # Subtract 1 to exclude the point itself
+#         intensity[i] = len(neighbors_idx) - 1
 
-    for i in tqdm(range(n_points), desc="Calculating Gaussian intensity"):
-        neighbors_idx = tree.query_ball_point(positions[i], radius)
-        # Subtract 1 to exclude the point itself
-        intensity[i] = len(neighbors_idx) - 1
+#     # Normalize intensity values
+#     min_intensity = np.min(intensity)
+#     max_intensity = np.max(intensity)
+#     normalized_intensity = (intensity - min_intensity) / (
+#         max_intensity - min_intensity
+#     ) if max_intensity > min_intensity else np.zeros_like(intensity)
 
-    # Normalize intensity values
-    min_intensity = np.min(intensity)
-    max_intensity = np.max(intensity)
-    normalized_intensity = (intensity - min_intensity) / (
-        max_intensity - min_intensity
-    ) if max_intensity > min_intensity else np.zeros_like(intensity)
-
-    return normalized_intensity
+#     return normalized_intensity
 
 
 # Read about KD-Tree (Medium | EN): https://medium.com/@isurangawarnasooriya/exploring-kd-trees-a-comprehensive-guide-to-implementation-and-applications-in-python-3385fd56a246
@@ -176,23 +175,27 @@ def create_heatmap_mesh_from_intensity(input_file,
     #     ball_radius = avg_distance * 10
 
     # Calculate intensity
-    point_intensity = calculate_point_intensity(pcd, ball_radius)
+    normalized_intensity = calculate_point_intensity(pcd, ball_radius)
 
     # Load the mesh (OBJ or PLY supported by Open3D)
     mesh = o3d.io.read_triangle_mesh(model_file)
     vertices = np.asarray(mesh.vertices)
     n_vertices = vertices.shape[0]
 
-    # Build KDTree for efficient nearest neighbor search
-    tree = KDTree(positions)
+    # Build KDTree for efficient radius search
+    # tree = KDTree(positions)
+    tree = o3d.geometry.KDTreeFlann(pcd)
     colors = np.zeros((n_vertices, 3))
     # cmap = plt.get_cmap("jet")
 
     for i in tqdm(range(n_vertices), desc="Applying intensity to mesh"):
         vertex = vertices[i]
         # Find points within interpolation_radius of the vertex
-        nearby_point_indices = tree.query_ball_point(vertex,
-                                                     interpolation_radius)
+        # yapf: disable
+        # nearby_point_indices = tree.query_ball_point(vertex, interpolation_radius)
+        [k, nearby_point_indices,
+         _] = tree.search_radius_vector_3d(vertex, interpolation_radius)
+        # yapf: enable
 
         # Weighted interpolation
         if nearby_point_indices:
@@ -201,12 +204,11 @@ def create_heatmap_mesh_from_intensity(input_file,
             #     distance = np.linalg.norm(vertex - positions[point_index])
             #     weights.append(1.0 / (distance + 1e-6))
             # weights = np.array(weights)
-            # weighted_densities = weights * point_intensity[nearby_point_indices]
+            # weighted_densities = weights * normalized_intensity[nearby_point_indices]
             # interpolated_intensity = np.sum(weighted_densities) / np.sum(
             #     weights)
             # colors[i, :] = cmap(interpolated_intensity)[:3]
-
-            colors[i, :] = cmap(point_intensity[nearby_point_indices][0])[:3]
+            colors[i, :] = cmap(np.average(normalized_intensity[nearby_point_indices]))[:3]
         else:
             colors[i, :] = [0.0, 0.0, 0.0]  # This adds a dark blue background
 
@@ -221,6 +223,7 @@ def create_heatmap_mesh_from_intensity(input_file,
         visualize_geometry(mesh)
 
     return mesh
+    # yapf: enable
 
 
 def visualize_geometry(geometry, point_size=1.0):
@@ -249,7 +252,8 @@ def visualize_geometry(geometry, point_size=1.0):
 def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
                                   output_lookup_csv,
                                   output_segmented_meshes_dir,
-                                  output_combined_mesh_file):
+                                  output_combined_mesh_file,
+                                  association_radius, search_radius):
     """
     Processes the qa.csv file to extract gazed voxel XYZ and answers.
     Assigns specific colors and color names based on predefined answer choices,
@@ -370,16 +374,17 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         base_vertices = np.asarray(base_mesh.vertices)
 
         # Create a KDTree for the gaze points for efficient searching
-        gaze_kdtree = KDTree(voxel_positions)
+        # gaze_kdtree = KDTree(voxel_positions)
+        gaze_kdtree = o3d.geometry.KDTreeFlann(pcd_voxels)
 
         # Initialize colors for the combined mesh
         # Default to a neutral color (e.g., light gray or black) for parts of the mesh not gazed upon
         combined_mesh_vertex_colors = np.full_like(
             base_vertices, [0.0, 0.0, 0.0])  # Start with black
 
-        # Define a radius to associate gaze points with mesh vertices
-        # This radius needs to be tuned based on the scale of your model and gaze data
-        association_radius = 50.0  # Example radius, adjust as needed
+        # # Define a radius to associate gaze points with mesh vertices
+        # # This radius needs to be tuned based on the scale of your model and gaze data
+        # association_radius = 25.0
 
         print(
             "\n=== Generating combined mesh colored by questionnaire answers ==="
@@ -388,8 +393,9 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         for i, vertex in enumerate(
                 tqdm(base_vertices, desc="Coloring combined mesh")):
             # Find all gaze points within the association radius of the current mesh vertex
-            nearby_gaze_indices = gaze_kdtree.query_ball_point(
-                vertex, association_radius)
+            [k, nearby_gaze_indices,
+             _] = gaze_kdtree.search_radius_vector_3d(vertex,
+                                                      association_radius)
 
             if nearby_gaze_indices:
                 # If there are nearby gaze points, determine the dominant color/answer
@@ -439,8 +445,12 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
             if len(category_gaze_positions) == 0:
                 continue
 
+            pcd_category_gaze = o3d.geometry.PointCloud()
+            pcd_category_gaze.points = o3d.utility.Vector3dVector(
+                category_gaze_positions)
+
             # Create a KDTree for the gaze points of this category
-            category_tree = KDTree(category_gaze_positions)
+            category_tree = o3d.geometry.KDTreeFlann(pcd_category_gaze)
 
             # Determine color for this category
             category_color_info = answer_color_map.get(
@@ -461,10 +471,11 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
             for i, vertex in enumerate(
                     tqdm(base_vertices,
                          desc=f"Coloring mesh for {answer_category}")):
-                # Find if this mesh vertex is close to any gaze point for this answer category
-                search_radius = 50.0  # Adjust this radius based on your data's spatial distribution
-                nearby_gaze_indices = category_tree.query_ball_point(
-                    vertex, search_radius)
+                # # Find if this mesh vertex is close to any gaze point for this answer category
+                # search_radius = 25.0
+                [k, nearby_gaze_indices,
+                 _] = category_tree.search_radius_vector_3d(
+                     vertex, search_radius)
 
                 if nearby_gaze_indices:
                     # If nearby gaze points exist for this category, color the vertex with the category's color
@@ -583,11 +594,11 @@ if __name__ == '__main__':
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
                     )
-                    process_questionnaire_answers(qa_input_file, model_file,
-                                                  output_qa_ply,
-                                                  output_qa_lookup_csv,
-                                                  output_segmented_meshes_dir,
-                                                  output_combined_mesh_file)
+                    process_questionnaire_answers(
+                        qa_input_file, model_file, output_qa_ply,
+                        output_qa_lookup_csv, output_segmented_meshes_dir,
+                        output_combined_mesh_file, mesh_interpolation_radius,
+                        mesh_interpolation_radius)
 
             else:
                 # Generate colored point cloud based on intensity
@@ -618,11 +629,11 @@ if __name__ == '__main__':
                     print(
                         "\n=== Processing questionnaire answers and generating voxel points ==="
                     )
-                    process_questionnaire_answers(qa_input_file, model_file,
-                                                  output_qa_ply,
-                                                  output_qa_lookup_csv,
-                                                  output_segmented_meshes_dir,
-                                                  output_combined_mesh_file)
+                    process_questionnaire_answers(
+                        qa_input_file, model_file, output_qa_ply,
+                        output_qa_lookup_csv, output_segmented_meshes_dir,
+                        output_combined_mesh_file, parameters_dict[models][1],
+                        parameters_dict[models][1])
 
     te = time.time_ns()
 
