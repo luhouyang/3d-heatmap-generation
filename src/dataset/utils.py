@@ -1,6 +1,6 @@
 """
 Author: Lu Hou Yang
-Last updated: 4 July 2025
+Last updated: 7 July 2025
 
 Contains utility functions for 
 - 3D eye gaze data and voice recording
@@ -16,6 +16,7 @@ Notes
 
 import os
 import pathlib
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -130,23 +131,23 @@ DEFAULT_QNA_ANSEWR_COLOR_MAP = {
     "面白い・気になる形だ": {
         "rgb": [255, 165, 0],
         "name": "Orange"
-    },  # Attention to shape
+    },
     "美しい・芸術的だ": {
         "rgb": [0, 128, 0],
         "name": "Green"
-    },  # Positive aesthetic
+    },
     "不思議・意味不明": {
         "rgb": [128, 0, 128],
         "name": "Purple"
-    },  # Confusion/Thought
+    },
     "不気味・不安・怖い": {
         "rgb": [255, 0, 0],
         "name": "Red"
-    },  # Negative feeling
+    },
     "何も感じない": {
         "rgb": [255, 255, 0],
         "name": "Yellow"
-    },  # No specific reason
+    },
 }
 
 ### CALCULATION ###
@@ -195,11 +196,28 @@ def calculate_normalized_point_intensity(pcd, ball_radius):
 ### FILTERING ###
 
 
-def generate_filtered_dataset_report():
+def generate_filtered_dataset_report(
+    groups: List = [],
+    session_ids: List = [],
+    pottery_ids: List = [],
+    min_pointcloud_size: float = 0.0,
+    min_qa_size: float = 0.0,
+    min_voice_quality: float = 0.1,
+):
     pass
 
 
-def filter_data_on_condition():
+def filter_data_on_condition(
+    groups: List = [],
+    session_ids: List = [],
+    pottery_ids: List = [],
+    min_pointcloud_size: float = 0.0,
+    min_qa_size: float = 0.0,
+    min_voice_quality: float = 0.1,
+    from_tracking_sheet: bool = False,
+    tracking_sheet_path: str = "",
+    generate_report: bool = True,
+):
     pass
 
 
@@ -220,7 +238,7 @@ def create_gaze_intensity_point_cloud(
         ball_radius (float): Radius of the sphere used for neighborhood search
 
     Returns:
-        pcd: The created Open3D pint cloud object
+        pcd: The created Open3D point cloud object
     """
     data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
 
@@ -268,9 +286,13 @@ def create_gaze_intensity_heatmap_mesh(
         ball_radius (float): Radius of the sphere used for neighborhood search
         HOLOLENS_2_SPATIAL_ERROR (float): The spatial accuracy / error of HoloLens 2. Reference: https://arxiv.org/abs/2111.07209 [An Assessment of the Eye Tracking Signal Quality Captured in the HoloLens 2]. Official: 1.5 | Paper original: 6.45 | Paper recalibrated: 2.66
         BASE_COLOR (tuple): Background color of the heatmap mesh for vertex that do not have gaze points
-        CMAP (plt.Colormap): Heatmap color scheme 
+        CMAP (plt.Colormap): Heatmap color scheme. DEFAULT_CMAP = plt.get_cmap('jet')
+    
+    Returns:
+        mesh: The created Open3D mesh object
     """
     SD_2_SQUARED_SPATIAL_ACCURACY = (2 * HOLOLENS_2_SPATIAL_ERROR)**2
+
     data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
 
     positions = data[:, :3]  # Only xyz
@@ -344,13 +366,128 @@ def create_gaze_intensity_heatmap_mesh(
     # yapf: enable
 
 
+#yapf: disable
 def create_qna_segmentation_mesh(
     input_file,
     model_file,
     association_radius,
     QNA_ANSEWR_COLOR_MAP=DEFAULT_QNA_ANSEWR_COLOR_MAP,
+    BASE_COLOR = [0.0, 0.0, 0.0],
 ):
-    pass
+    """
+    Assigns specific colors and color names based on predefined answer choices,
+    segmented meshes for each answer category by answers. For combined mesh reference
+    the original processing script. However, some data is lost during combination into 3 channels,
+    it is prefered to combine the different answers into more channels later.
+
+    Args:
+        input_file (str): Path to the input CSV file containing point cloud data
+        model_file (str): Path to the input OBJ/PLY model file
+        association_radius (float): Radius of the sphere used to assign region and search for nearby QNA answers
+        BASE_COLOR (tuple): Background color of the heatmap mesh for vertex that do not have gaze points
+        QNA_ANSEWR_COLOR_MAP (dict): The QNA asnwers, rbg color, color name. DEFAULT_QNA_ANSEWR_COLOR_MAP = {
+            "面白い・気になる形だ": {
+                "rgb": [255, 165, 0],
+                "name": "Orange"
+            },
+            "美しい・芸術的だ": {
+                "rgb": [0, 128, 0],
+                "name": "Green"
+            },
+            "不思議・意味不明": {
+                "rgb": [128, 0, 128],
+                "name": "Purple"
+            },
+            "不気味・不安・怖い": {
+                "rgb": [255, 0, 0],
+                "name": "Red"
+            },
+            "何も感じない": {
+                "rgb": [255, 255, 0],
+                "name": "Yellow"
+            },
+        }
+
+    Returns:
+        pcd: The created Open3D point cloud object
+        segmented_mesh_dict: {answer: Open3D mesh object} pairs
+    """
+    if not os.path.exists(input_file):
+        print(
+            f"Error: QNA file '{input_file}' not found. Cannot perform operations."
+        )
+        return None
+    df = pd.read_csv(input_file, sep=',', header=0)
+
+    df['estX'] = pd.to_numeric(df['estX'], errors='coerce')
+    df['estY'] = pd.to_numeric(df['estY'], errors='coerce')
+    df['estZ'] = pd.to_numeric(df['estZ'], errors='coerce')
+    df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
+
+    df['answer'] = df['answer'].astype(str).str.strip()
+
+    df = df.dropna(subset=['estX', 'estY', 'estZ', 'answer', 'timestamp'])
+
+    assigned_colors_01 = []  # Store as 0-1 for Open3D PLY
+    for answer_text in df['answer']:
+        if answer_text in QNA_ANSEWR_COLOR_MAP:
+            assigned_colors_01.append(np.array(QNA_ANSEWR_COLOR_MAP[answer_text]["rgb"]) / 255.0)
+        else:
+            assigned_colors_01.append(BASE_COLOR / 255.0)
+
+    positions = df[['estX', 'estY', 'estZ']].values.astype(np.float64)
+
+    # Create QNA Point Cloud
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(positions)
+    pcd.colors = o3d.utility.Vector3dVector(np.array(assigned_colors_01))
+
+    # Create QNA Combined Mesh
+    if not os.path.exists(model_file):
+        print(
+            f"Error: Base model file '{model_file}' not found. Cannot perform mesh operations."
+        )
+        return None
+    
+    mesh = o3d.io.read_triangle_mesh(model_file)
+    vertices = np.asarray(mesh.vertices)
+
+    segmented_mesh_dict = {}
+    unique_answers = df['answer'].unique()
+
+    for answer_category in unique_answers:
+        category_df = df[df['answer'] == answer_category]
+        if category_df.empty:
+            continue
+
+        category_gaze_positions = category_df[['estX', 'estY', 'estZ']].values.astype(np.float64)
+        if len(category_gaze_positions) == 0:
+            continue
+
+        pcd_category_gaze = o3d.geometry.PointCloud()
+        pcd_category_gaze.points = o3d.utility.Vector3dVector(category_gaze_positions)
+
+        # Create a KDTree for the gaze points of this category
+        category_tree = o3d.geometry.KDTreeFlann(pcd_category_gaze)
+
+        category_rgb_01 = np.array(QNA_ANSEWR_COLOR_MAP[answer_category]["rgb"]) / 255.0
+    
+        # Create a copy of the base mesh for this segment
+        segmented_mesh = o3d.geometry.TriangleMesh(mesh)
+        segmented_mesh.paint_uniform_color(BASE_COLOR)
+
+        mesh_vertex_colors = np.asarray(segmented_mesh.vertex_colors)
+        for i, vertex in enumerate(vertices):
+            [k, idx, _] = category_tree.search_radius_vector_3d(vertex, association_radius)
+
+            if idx:
+                mesh_vertex_colors[i] = category_rgb_01
+
+        segmented_mesh.vertex_colors = o3d.utility.Vector3dVector(mesh_vertex_colors)
+        segmented_mesh_dict[answer_category] = segmented_mesh
+
+    return pcd, segmented_mesh_dict
+    # yapf: enable
 
 
 def process_voice_data(input_file):

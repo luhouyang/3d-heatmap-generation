@@ -9,7 +9,7 @@ import pandas as pd
 import polars as pl
 
 cmap = plt.get_cmap('jet')
-SD_2_SQUARED_SPATIAL_ACCURACY = (2 * 6.45)**2
+# SD_2_SQUARED_SPATIAL_ACCURACY = (2 * 6.45)**2
 
 # def gaussian_blur_intensity(positions, sigma):
 #     """Applies Gaussian blur to estimate point intensity."""
@@ -160,6 +160,8 @@ def create_heatmap_mesh_from_intensity(
     Returns:
         mesh: The created Open3D mesh object with intensity colors.
     """
+    SD_2_SQUARED_SPATIAL_ACCURACY = (2 * HOLOLENS_2_SPATIAL_ERROR)**2
+
     # data = np.genfromtxt(input_file, delimiter=',', skip_header=1)
     data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
     # data = pl.read_csv(input_file, skip_lines=1, has_header=False).to_numpy()
@@ -212,6 +214,7 @@ def create_heatmap_mesh_from_intensity(
             # interpolated_intensity = np.sum(weighted_densities) / np.sum(
             #     weights)
             # colors[i, :] = cmap(interpolated_intensity)[:3]
+            
             # colors[i, :] = cmap(np.average(normalized_intensity[nearby_point_indices]))[:3]
 
             # Calculate the gaussian adjusted intensity of each vertex based on nearby points within radius
@@ -347,12 +350,12 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         # Drop rows with NaN in essential columns before processing
         df = df.dropna(subset=['estX', 'estY', 'estZ', 'answer', 'timestamp'])
 
-        # Create a combined 'gazedVoxelID' from estX, estY, estZ and timestamp
-        # This creates a unique identifier for each gaze point that can be associated with an answer
-        df['gazedVoxelID'] = df['estX'].astype(str) + '_' + \
-                             df['estY'].astype(str) + '_' + \
-                             df['estZ'].astype(str) + '_' + \
-                             df['timestamp'].astype(str)
+        # # Create a combined 'gazedVoxelID' from estX, estY, estZ and timestamp
+        # # This creates a unique identifier for each gaze point that can be associated with an answer
+        # df['gazedVoxelID'] = df['estX'].astype(str) + '_' + \
+        #                      df['estY'].astype(str) + '_' + \
+        #                      df['estZ'].astype(str) + '_' + \
+        #                      df['timestamp'].astype(str)
 
         # Initialize lists for colors and color names
         assigned_colors_255 = []  # Store as 0-255 for Open3D PLY
@@ -377,12 +380,12 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         df['color_rgb_255'] = assigned_colors_255  # Also keep RGB for completeness in lookup if desired
 
         # Extract XYZ positions and ensure float64 type for Open3D
-        voxel_positions = df[['estX', 'estY',
+        positions = df[['estX', 'estY',
                               'estZ']].values.astype(np.float64)
 
         # Create an Open3D point cloud for these voxels
         pcd_voxels = o3d.geometry.PointCloud()
-        pcd_voxels.points = o3d.utility.Vector3dVector(voxel_positions)
+        pcd_voxels.points = o3d.utility.Vector3dVector(positions)
 
         # Assign the calculated colors (0-1 range) to the point cloud
         pcd_voxels.colors = o3d.utility.Vector3dVector(
@@ -393,14 +396,18 @@ def process_questionnaire_answers(qa_input_file, model_file, output_ply_file,
         print(f"Gazed voxel point cloud saved to: {output_ply_file}")
 
         # Save the lookup table (voxel ID, XYZ, answer, and color name) to a CSV
+        # df_lookup = df[[
+        #     'gazedVoxelID', 'estX', 'estY', 'estZ', 'answer', 'color_name',
+        #     'color_rgb_255'
+        # ]]
         df_lookup = df[[
-            'gazedVoxelID', 'estX', 'estY', 'estZ', 'answer', 'color_name',
+            'estX', 'estY', 'estZ', 'answer', 'color_name',
             'color_rgb_255'
         ]]
         df_lookup.to_csv(output_lookup_csv, index=False)
         print(f"Voxel answer lookup table saved to: {output_lookup_csv}")
 
-        # --- Mesh Processing ---
+        # Mesh Processing
         # Load the base mesh for segmentation and combined mesh
         if not os.path.exists(model_file):
             print(
@@ -552,7 +559,7 @@ if __name__ == '__main__':
 
     # Parameters
     point_cloud_ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
-    HOLOLENS_2_SPATIAL_ERROR = 6.45  # 7.5 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
+    HOLOLENS_2_SPATIAL_ERROR = 2.66  # Original: 6.45 | Recalibrated: 2.66
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
     viz = False
@@ -621,7 +628,7 @@ if __name__ == '__main__':
                         model_file,
                         output_mesh,
                         visualize=viz,
-                        interpolation_radius=HOLOLENS_2_SPATIAL_ERROR,
+                        HOLOLENS_2_SPATIAL_ERROR=HOLOLENS_2_SPATIAL_ERROR,
                         ball_radius=ball_radius)
                 elif generate_mesh and not os.path.exists(model_file):
                     print(
@@ -656,7 +663,7 @@ if __name__ == '__main__':
                         model_file,
                         output_mesh,
                         visualize=viz,
-                        interpolation_radius=parameters_dict[models][1],
+                        HOLOLENS_2_SPATIAL_ERROR=parameters_dict[models][1],
                         ball_radius=parameters_dict[models][2])
                 elif generate_mesh and not os.path.exists(model_file):
                     print(
