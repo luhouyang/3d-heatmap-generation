@@ -26,8 +26,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Colors
-CMAP = plt.get_cmap('jet')
-BASE_COLOR = [0.0, 0.0, 0.0]
+DEFAULT_CMAP = plt.get_cmap('jet')
 
 # Pottery & Dogu assigned numbers
 ASSIGNED_NUMBERS_DICT = {
@@ -126,6 +125,30 @@ ASSIGNED_NUMBERS_DICT = {
     'UD0028': '93'
 }
 
+# QNA Answer Color
+DEFAULT_QNA_ANSEWR_COLOR_MAP = {
+    "面白い・気になる形だ": {
+        "rgb": [255, 165, 0],
+        "name": "Orange"
+    },  # Attention to shape
+    "美しい・芸術的だ": {
+        "rgb": [0, 128, 0],
+        "name": "Green"
+    },  # Positive aesthetic
+    "不思議・意味不明": {
+        "rgb": [128, 0, 128],
+        "name": "Purple"
+    },  # Confusion/Thought
+    "不気味・不安・怖い": {
+        "rgb": [255, 0, 0],
+        "name": "Red"
+    },  # Negative feeling
+    "何も感じない": {
+        "rgb": [255, 255, 0],
+        "name": "Yellow"
+    },  # No specific reason
+}
+
 ### CALCULATION ###
 
 
@@ -176,14 +199,18 @@ def generate_filtered_dataset_report():
     pass
 
 
-def filter_data_on():
+def filter_data_on_condition():
     pass
 
 
 ### PROCESS DATA ###
 
 
-def create_gaze_intensity_point_cloud(input_file, ball_radius):
+def create_gaze_intensity_point_cloud(
+    input_file,
+    ball_radius,
+    CMAP=DEFAULT_CMAP,
+):
     """
     Creates a point cloud from xyz data in CSV file,
     coloring points based on their normalized intensity using a KD-tree for radius search.
@@ -209,7 +236,8 @@ def create_gaze_intensity_point_cloud(input_file, ball_radius):
     pcd.points = o3d.utility.Vector3dVector(positions)
 
     # Calculate intensity
-    normalized_intensity = calculate_normalized_point_intensity(pcd, ball_radius)
+    normalized_intensity = calculate_normalized_point_intensity(
+        pcd, ball_radius)
 
     # Get color based on normalized intensity
     colors = CMAP(normalized_intensity)[:, :3]
@@ -217,13 +245,32 @@ def create_gaze_intensity_point_cloud(input_file, ball_radius):
 
     return pcd
 
+
 # yapf: disable
 def create_gaze_intensity_heatmap_mesh(
     input_file,
     model_file,
-    interpolation_radius,
     ball_radius,
+    # https://arxiv.org/abs/2111.07209 [An Assessment of the Eye Tracking Signal Quality Captured in the HoloLens 2]
+    # Official: 1.5 | Paper original: 6.45 | Paper recalibrated: 2.66
+    HOLOLENS_2_SPATIAL_ERROR = 6.45,
+    BASE_COLOR = [0.0, 0.0, 0.0],
+    CMAP=DEFAULT_CMAP,
 ):
+    """
+    Create a heatmap on a provided 3D mesh model based on the intensity
+    of the input points (eye gaze point cloud), using a gaussian adjusted intensity
+    for region coloring.
+
+    Args:
+        input_file (str): Path to the input CSV file containing point cloud data
+        model_file (str): Path to the input OBJ/PLY model file
+        ball_radius (float): Radius of the sphere used for neighborhood search
+        HOLOLENS_2_SPATIAL_ERROR (float): The spatial accuracy / error of HoloLens 2. Reference: https://arxiv.org/abs/2111.07209 [An Assessment of the Eye Tracking Signal Quality Captured in the HoloLens 2]. Official: 1.5 | Paper original: 6.45 | Paper recalibrated: 2.66
+        BASE_COLOR (tuple): Background color of the heatmap mesh for vertex that do not have gaze points
+        CMAP (plt.Colormap): Heatmap color scheme 
+    """
+    SD_2_SQUARED_SPATIAL_ACCURACY = (2 * HOLOLENS_2_SPATIAL_ERROR)**2
     data = pd.read_csv(input_file, header=None, skiprows=1).to_numpy()
 
     positions = data[:, :3]  # Only xyz
@@ -249,25 +296,60 @@ def create_gaze_intensity_heatmap_mesh(
     # Color the mesh based on normalized intensity with a circular interpolation
     # Modify radius later based on the eye gaze error / range
     kdtree = o3d.geometry.KDTreeFlann(pcd)
+    colors_intensity = np.zeros(n_vertices)
     colors = np.zeros((n_vertices, 3))
 
     # Find points on model mesh that are close to the eye gaze intensity point cloud
     for i, vertex in enumerate(vertices):
-        [k, idx, _] = kdtree.search_radius_vector_3d(vertex, interpolation_radius)
+        [k, idx, _] = kdtree.search_radius_vector_3d(vertex, HOLOLENS_2_SPATIAL_ERROR)
 
         if idx:
-            # Assign color to the points on model mesh within interpolation radius
-            # Based on the average intensity of points within interpolation radius
-            colors[i, :] = CMAP(np.average(normalized_intensity[idx]))[:3]
-        else:
+            # Calculate the gaussian adjusted intensity of each vertex based on nearby points within radius
+            #
+            #                               n(points in radius)                         squared_euclidean_distance
+            # gaussian_adjusted_intensity =        SUM          weight_of_point * e ^ - _____________________________
+            #                                     i = 1                                 SD_2_SQUARED_SPATIAL_ACCURACY
+            #
+            # SD_2_SQUARED_SPATIAL_ACCURACY = (2 * HOLOLENS_2_SPATIAL_ERROR) ^ 2
+            #
+            # Then, get the average intensity and assign to the colors_intensity list
+            # After all aggregation are done, normalize the colors_intensity
+            # Map to the CMAP color table
+            gaussian_adjusted_intensities = []
+            for point_index in idx:
+                # Get the squared euclidean distance
+                # Since square root will be canceled by the square operation of gaussian adjusted weight calculation
+                difference_vector = vertex - positions[point_index]
+                squared_euclidean_distance = np.sum(difference_vector**2)
+                gaussian_adjusted_intensity = normalized_intensity[point_index] * np.exp(-squared_euclidean_distance / SD_2_SQUARED_SPATIAL_ACCURACY)
+                gaussian_adjusted_intensities.append(gaussian_adjusted_intensity)
+            gaussian_adjusted_intensities = np.array(gaussian_adjusted_intensities)
+            colors_intensity[i] = np.average(gaussian_adjusted_intensities)
+
+    # Normalize the gaussian adjusted intensities
+    colors_max = np.max(colors_intensity)
+    colors_min = np.min(colors_intensity)
+    normalized_colors_weights = (colors_intensity - colors_min) / (colors_max - colors_min)
+
+    # Map to the CMAP color table
+    for i in range(n_vertices):
+        if (normalized_colors_weights[i] == 0):
             colors[i, :] = BASE_COLOR
+        else:
+            colors[i, :] = CMAP(normalized_colors_weights[i])[:3]
 
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
     return mesh
-# yapf: enable
+    # yapf: enable
 
-def create_qna_segmentation_mesh(input_file, model_file, association_radius):
+
+def create_qna_segmentation_mesh(
+    input_file,
+    model_file,
+    association_radius,
+    QNA_ANSEWR_COLOR_MAP=DEFAULT_QNA_ANSEWR_COLOR_MAP,
+):
     pass
 
 
@@ -279,6 +361,13 @@ def process_voice_data(input_file):
 
 
 def visualize_geometry(geometry, point_size=1.0):
+    """
+    Visualize an Open3D geometry (point cloud or mesh).
+    
+    Args:
+        geometry: Open3D geometry object (point cloud or mesh)
+        point_size: Size of points if geometry is a point cloud
+    """
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(geometry)
@@ -288,7 +377,7 @@ def visualize_geometry(geometry, point_size=1.0):
         render_options.point_size = point_size
     elif isinstance(geometry, o3d.geometry.TriangleMesh):
         render_options.mesh_show_back_face = True
-    
+
     render_options.background_color = np.asarray([0.1, 0.1, 0.1])
     vis.run()
     vis.destroy_window()

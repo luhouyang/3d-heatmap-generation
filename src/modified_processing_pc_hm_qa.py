@@ -9,6 +9,7 @@ import pandas as pd
 import polars as pl
 
 cmap = plt.get_cmap('jet')
+SD_2_SQUARED_SPATIAL_ACCURACY = (2 * 6.45)**2
 
 # def gaussian_blur_intensity(positions, sigma):
 #     """Applies Gaussian blur to estimate point intensity."""
@@ -135,15 +136,19 @@ def create_and_visualize_xyz_colored_point_cloud(input_file,
     return pcd
 
 
-def create_heatmap_mesh_from_intensity(input_file,
-                                       model_file,
-                                       output_file,
-                                       interpolation_radius=0.05,
-                                       visualize=True,
-                                       ball_radius=0.05):
+def create_heatmap_mesh_from_intensity(
+        input_file,
+        model_file,
+        output_file,
+        # https://arxiv.org/abs/2111.07209 [An Assessment of the Eye Tracking Signal Quality Captured in the HoloLens 2]
+        # Official: 1.5 | Paper original: 6.45 | Paper recalibrated: 2.66
+        HOLOLENS_2_SPATIAL_ERROR=6.45,
+        visualize=True,
+        ball_radius=0.05):
     """
     Generates a heatmap on a provided 3D mesh model based on the intensity
-    of the input points, using a weighted interpolation for higher resolution.
+    of the input points, using a gaussian adjusted intensity
+    for region coloring.
 
     Args:
         input_file (str): Path to the input CSV file containing point data (x, y, z).
@@ -185,17 +190,16 @@ def create_heatmap_mesh_from_intensity(input_file,
     # Build KDTree for efficient radius search
     # tree = KDTree(positions)
     tree = o3d.geometry.KDTreeFlann(pcd)
+    colors_weights = np.zeros(n_vertices)
     colors = np.zeros((n_vertices, 3))
     # cmap = plt.get_cmap("jet")
 
     for i in tqdm(range(n_vertices), desc="Applying intensity to mesh"):
         vertex = vertices[i]
         # Find points within interpolation_radius of the vertex
-        # yapf: disable
         # nearby_point_indices = tree.query_ball_point(vertex, interpolation_radius)
         [k, nearby_point_indices,
-         _] = tree.search_radius_vector_3d(vertex, interpolation_radius)
-        # yapf: enable
+         _] = tree.search_radius_vector_3d(vertex, HOLOLENS_2_SPATIAL_ERROR)
 
         # Weighted interpolation
         if nearby_point_indices:
@@ -208,10 +212,44 @@ def create_heatmap_mesh_from_intensity(input_file,
             # interpolated_intensity = np.sum(weighted_densities) / np.sum(
             #     weights)
             # colors[i, :] = cmap(interpolated_intensity)[:3]
-            colors[i, :] = cmap(np.average(normalized_intensity[nearby_point_indices]))[:3]
-        else:
-            colors[i, :] = [0.0, 0.0, 0.0]  # This adds a dark blue background
+            # colors[i, :] = cmap(np.average(normalized_intensity[nearby_point_indices]))[:3]
 
+            # Calculate the gaussian adjusted intensity of each vertex based on nearby points within radius
+            #
+            #       n(points in radius)                         squared_euclidean_distance
+            # GAI =        SUM          weight_of_point * e ^ - _____________________________
+            #             i = 1                                 SD_2_SQUARED_SPATIAL_ACCURACY
+            #
+            # SD_2_SQUARED_SPATIAL_ACCURACY = (2 * HOLOLENS_2_SPATIAL_ERROR) ^ 2
+            #
+            # Then, get the average intensity and assign to the colors_intensity list
+            # After all aggregation are done, normalize the colors_intensity
+            # Map to the CMAP color table
+            gaussian_adjusted_weights = []
+            for point_index in nearby_point_indices:
+                # Get the squared euclidean distance,
+                # since square root will be canceled by the square operation of gaussian adjusted weight calculation
+                difference_vector = vertex - positions[point_index]
+                squared_euclidean_distance = np.sum(difference_vector**2)
+                gaussian_adjusted_weight = normalized_intensity[
+                    point_index] * np.exp(-squared_euclidean_distance /
+                                          SD_2_SQUARED_SPATIAL_ACCURACY)
+                gaussian_adjusted_weights.append(gaussian_adjusted_weight)
+            gaussian_adjusted_weights = np.array(gaussian_adjusted_weights)
+            colors_weights[i] = np.average(gaussian_adjusted_weights)
+        # else:
+        #     colors[i, :] = [0.0, 0.0, 0.0]  # This adds a dark blue background
+
+    colors_max = np.max(colors_weights)
+    colors_min = np.min(colors_weights)
+    normalized_colors_weights = (colors_weights - colors_min) / (colors_max -
+                                                                 colors_min)
+    # colors = cmap(normalized_colors_weights)[:, :3]
+    for i in range(n_vertices):
+        if (normalized_colors_weights[i] == 0):
+            colors[i, :] = [0.0, 0.0, 0.0]
+        else:
+            colors[i, :] = cmap(normalized_colors_weights[i])[:3]
     mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
 
     # Write output mesh in .obj format
@@ -514,7 +552,7 @@ if __name__ == '__main__':
 
     # Parameters
     point_cloud_ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
-    mesh_interpolation_radius = 5  # 10 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
+    HOLOLENS_2_SPATIAL_ERROR = 6.45  # 7.5 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
     ball_radius = 25  # 25 | 0.05 for points in range ~[-200, 400] | ~[-1, 1]
 
     viz = False
@@ -583,7 +621,7 @@ if __name__ == '__main__':
                         model_file,
                         output_mesh,
                         visualize=viz,
-                        interpolation_radius=mesh_interpolation_radius,
+                        interpolation_radius=HOLOLENS_2_SPATIAL_ERROR,
                         ball_radius=ball_radius)
                 elif generate_mesh and not os.path.exists(model_file):
                     print(
@@ -597,8 +635,8 @@ if __name__ == '__main__':
                     process_questionnaire_answers(
                         qa_input_file, model_file, output_qa_ply,
                         output_qa_lookup_csv, output_segmented_meshes_dir,
-                        output_combined_mesh_file, mesh_interpolation_radius,
-                        mesh_interpolation_radius)
+                        output_combined_mesh_file, HOLOLENS_2_SPATIAL_ERROR,
+                        HOLOLENS_2_SPATIAL_ERROR)
 
             else:
                 # Generate colored point cloud based on intensity
